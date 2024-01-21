@@ -73,8 +73,8 @@ $ npm install
 
 ```bash
 # Al correr el proyecto, va a pedirte las credeneciales de AWS para poder generar el proyecto.
-$ serveless deploy
+$ serverless deploy
 
 # Offline, se debe tener Java instalado. para correr DynamoDB localmente. Revisar src/libs/dynamo.ts para ver la configuración local.
-$ serveless offline start
+$ serverless offline start
 ```
