@@ -1,22 +1,27 @@
 import * as crypto from 'crypto';
 
-const CRYPTO_ALGORITHM = 'aes-192-cbc';
+const CRYPTO_ALGORITHM = 'aes-128-gcm';
 
 export const encryptData = (data: string, key: string) => {
+    const paddedKey = Buffer.concat([Buffer.from(key), Buffer.from(key)]).slice(0, 16);
+
     const iv = crypto.randomBytes(16);
-    const bufferKey = Buffer.from(key, 'utf8');
-    const cipher = crypto.createCipheriv(CRYPTO_ALGORITHM, bufferKey, iv);
-    let encrypted = cipher.update(data, 'utf8', 'hex');
+    const cipher = crypto.createCipheriv(CRYPTO_ALGORITHM, paddedKey, iv);
+    let encrypted = cipher.update(data, 'utf-8', 'hex');
     encrypted += cipher.final('hex');
-    return `${iv.toString('hex')}:${encrypted.toString()}`;
+    const authTag = cipher.getAuthTag();
+    return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
 }
 
 export const decryptData = (data: string, key: string) => {
-    const [iv, encrypted] = data.split(':');
-    const decipher = crypto.createDecipheriv(CRYPTO_ALGORITHM, Buffer.from(key), Buffer.from(iv, 'hex'));
-    
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
+    const [ivHex, authTagHex, encrypted] = data.split(':');
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    const paddedKey = Buffer.concat([Buffer.from(key), Buffer.from(key)]).slice(0, 16);
 
-    return decrypted.toString();
+    const decipher = crypto.createDecipheriv(CRYPTO_ALGORITHM, paddedKey, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf-8');
+    decrypted += decipher.final('utf-8');
+    return decrypted;
 }

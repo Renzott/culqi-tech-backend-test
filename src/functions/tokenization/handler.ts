@@ -1,37 +1,20 @@
-import { ValidatedEventAPIGatewayProxyEvent, formatJSONError } from '@libs/api-gateway';
+import { ValidatedEventAPIGatewayProxyEvent } from '@libs/api-gateway';
 import { formatJSONResponse } from '@libs/api-gateway';
 import { middyfy } from '@libs/lambda';
 import schema from './schema';
-import { encryptData } from '../../libs/crypto';
-import { put } from '../../libs/dynamo';
 import { validateTokenMiddleware } from '../../middleware/validateToken';
 import { validateCard } from '../../common/validateBody';
-
-const TOKEN_PREFIX = 'pk_test_';
-const TOKEN_EXPIRATION_MINUTES = 15;
-
-const TOKEN_LENGTH = 16;
-
-const generateToken = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let token = '';
-    for (let i = 0; i < TOKEN_LENGTH; i++) {
-        token += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return token;
-}
+import { DynamoCardAdapter } from '../../infrastructure/dynamodb/DynamoCardAdapter';
+import dynamoTablesName from '../../common/dynamo/dynamoTablesName';
+import { CardService } from '../../application/CardService';
+import { generateToken } from '../../libs/tokenGenerator';
+import { DynamoCardRegisterAdapter } from '../../infrastructure/dynamodb/DynamoCardRegisterAdapter';
+import { CardRegisterService } from '../../application/CardRegisterService';
 
 const tokenization: ValidatedEventAPIGatewayProxyEvent<typeof schema> = async (event) => {
+
     const { body } = event;
-    const { card_number, cvv, expiration_month, expiration_year, email } = body;
-
-    if (!card_number || !cvv || !expiration_month || !expiration_year || !email) {
-        return formatJSONError(400, `Missing parameters`);
-    }
-
-    if (!email.match(/^(.+)@(gmail\.com|hotmail\.com|yahoo\.es)$/)) {
-        return formatJSONError(400, `Invalid email`);
-    }
+    const card_token = generateToken();
 
     const bodyValidation = validateCard(body);
     
@@ -39,27 +22,23 @@ const tokenization: ValidatedEventAPIGatewayProxyEvent<typeof schema> = async (e
         return bodyValidation;
     }
 
-    const token = `${TOKEN_PREFIX}${generateToken()}`
+    const cardRepository = new DynamoCardAdapter(dynamoTablesName.tokenTable);
+    const cardService = new CardService(cardRepository);
+    
+    const card = await cardService.save(body, card_token);
 
-    const data_encrypted = encryptData(JSON.stringify({
-        card_number,
-        cvv,
-        expiration_month,
-        expiration_year,
-        email,
-    }), token);
 
-    const ttl_unix = Math.floor(Date.now() / 1000) + (TOKEN_EXPIRATION_MINUTES * 60);
+    const cardRegisterRepository = new DynamoCardRegisterAdapter(dynamoTablesName.registerCardTable);
+    const cardRegisterService = new CardRegisterService(cardRegisterRepository);
 
-    await put({
-        token: token,
-        data_encrypted,
-        expiration: ttl_unix,
+    await cardRegisterService.save({
+        register_pk: card_token,
+        expiration_ttl: card.expiration_ttl || 0,
     });
 
     return formatJSONResponse({
-        token: token,
-        expiration: ttl_unix,
+        token: card_token,
+        expiration: card.expiration_ttl || 0,
     });
 }
 

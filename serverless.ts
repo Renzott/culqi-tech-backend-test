@@ -1,13 +1,14 @@
 import type { AWS } from '@serverless/typescript';
 
-import hello from '@functions/hello';
-import tokenization from '@functions/tokenization';
-import dynamodbTables from './src/dynamo/resources';
+import { tokenization, login, getCard } from '@functions/index';
+
+
+import dynamodbTables from './src/common/dynamo/resources';
 
 const serverlessConfiguration: AWS = {
   service: 'culqi-tech-backend-test',
   frameworkVersion: '3',
-  plugins: ['serverless-esbuild','serverless-dynamodb','serverless-offline'],
+  plugins: ['serverless-esbuild', 'serverless-dynamodb', 'serverless-offline'],
   provider: {
     name: 'aws',
     runtime: 'nodejs14.x',
@@ -35,13 +36,17 @@ const serverlessConfiguration: AWS = {
               "dynamodb:UpdateItem",
               "dynamodb:DeleteItem",
             ],
-            Resource: "arn:aws:dynamodb:${self:provider.region}:${aws:accountId}:table/${self:custom.tableName}",
+            Resource: [
+              "arn:aws:dynamodb:${self:provider.region}:${aws:accountId}:table/${self:custom.commerceTable}",
+              "arn:aws:dynamodb:${self:provider.region}:${aws:accountId}:table/${self:custom.tokenTable}",
+              "arn:aws:dynamodb:${self:provider.region}:${aws:accountId}:table/${self:custom.registerCardTable}",
+            ],
           }
         ]
       }
     }
   },
-  functions: { hello, tokenization },
+  functions: { login, tokenization, getCard },
   resources: {
     Resources: {
       ...dynamodbTables,
@@ -49,7 +54,9 @@ const serverlessConfiguration: AWS = {
   },
   package: { individually: true },
   custom: {
-    tableName: 'culqi-tech-backend-test-table',
+    tokenTable: 'culqi-tech-token-table',
+    commerceTable: 'culqi-tech-commerce-table',
+    registerCardTable: 'culqi-tech-register-card-table',
     "serverless-dynamodb": {
       stage: "dev",
       start: {
@@ -58,6 +65,9 @@ const serverlessConfiguration: AWS = {
         migrate: true,
         seed: true,
       },
+    },
+    "serverless-offline": {
+      httpPort: 3001,
     },
     esbuild: {
       bundle: true,
