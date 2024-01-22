@@ -40,7 +40,7 @@ Body
 # GET /dev/getCard
 Headers
 {
-    Authorization: token 
+    Authorization: token_card
 }
 ```
 
@@ -59,6 +59,7 @@ Headers
 - TailwindCSS
 - Typescript
 - Zustand
+- shadcn/ui
 
 ## Instalación
 
